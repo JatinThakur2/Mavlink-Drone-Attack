@@ -54,7 +54,7 @@ drone_security_lab/
 │   └── mav.parm                      ← ArduPilot parameter file
 │
 ├── reports/                          ← Word documents
-│   ├── daily_report_june4.docx       ← Detection framework design
+│   ├── daily_report_june3.docx       ← Detection framework design
 │   ├── daily_report_june2.docx       ← Attack alignment + Wireshark dissectors
 │   ├── daily_report_june1.docx       ← Attack 3B + replay demo
 │   └── full_attack_report_v2.docx    ← Full technical report (all 5 attacks)
