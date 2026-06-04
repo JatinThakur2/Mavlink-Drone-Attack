@@ -53,19 +53,11 @@ drone_security_lab/
 │   ├── sitl_basic.py                 ← SITL + Gazebo + MAVProxy launcher
 │   └── mav.parm                      ← ArduPilot parameter file
 │
-├── scripts/                          ← Report generators
-│   ├── generate_june4_daily.py
-│   ├── generate_june2_daily.py
-│   ├── generate_june1_daily.py
-│   ├── generate_full_report_v2.py
-│   └── ...
-│
-├── reports/                          ← Generated Word documents
+├── reports/                          ← Word documents
 │   ├── daily_report_june4.docx       ← Detection framework design
 │   ├── daily_report_june2.docx       ← Attack alignment + Wireshark dissectors
 │   ├── daily_report_june1.docx       ← Attack 3B + replay demo
-│   ├── full_attack_report_v2.docx    ← Full technical report (all 5 attacks)
-│   └── ...
+│   └── full_attack_report_v2.docx    ← Full technical report (all 5 attacks)
 │
 └── reference/
     └── mavlink-time-spoofing-main/   ← Original research repo (reference only)
@@ -203,13 +195,3 @@ Detection layers:
 | pymavlink | 2.4.49 |
 | scikit-learn | 1.x (Phase 2) |
 
----
-
-## Reports
-
-| File | Contents |
-|------|----------|
-| `reports/daily_report_june4.docx` | Detection framework design — today |
-| `reports/daily_report_june2.docx` | Attack alignment, position spoofing, Wireshark dissectors |
-| `reports/daily_report_june1.docx` | Attack 3B, replay demo |
-| `reports/full_attack_report_v2.docx` | Complete technical report — all 5 attacks |
