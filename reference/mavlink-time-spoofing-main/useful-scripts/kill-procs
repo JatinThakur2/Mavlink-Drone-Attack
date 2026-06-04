@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+
+# REMEMBER TO RUN WITH SOURCE
+
+echo "Killing all MAVProxy, gz, qgc, and tmux processes"
+
+kill -9 $(pgrep -f '(MAV|mavproxy|gz|tmux|qgc)')

@@ -1,0 +1,1 @@
+cd ~/repos/MAVProxy && source ./.venv/bin/activate && python ./MAVProxy/mavproxy.py --console --map --load-module=GPSInput --out=127.0.0.1:5760 --mav20

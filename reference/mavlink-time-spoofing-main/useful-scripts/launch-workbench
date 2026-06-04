@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+
+echo "Launching four TMUX windows"
+
+tmux \
+    new-session  -s "mavlink"\; \
+    split-window -h -c "t"\; \
+    split-window -v \; \
+    select-pane -t 0 \; \
+    split-window -v \; \
+    detach
+
+echo "Launched four windows"
+
+tmux send-keys -t "1" "pushd ~/repos/MAVProxy && source ./.venv/bin/activate && python setup.py build install && python ./MAVProxy/mavproxy.py --console --map --load-module=GPSInput --out=tcpin:127.0.0.1:5765 --out=udp:127.0.0.1:5760 --mav20" Enter
+tmux send-keys -t "0" "pushd ~/repos/MAVProxy && source ./.venv/bin/activate && pushd ~/repos/mavlink-time-spoofing/simulate && python custom-input.py" Enter
+tmux send-keys -t "3" "pushd ~/repos/MAVProxy && source ./.venv/bin/activate && pushd ~/repos/mavlink-time-spoofing/simulate && python simulate-gps.py" Enter
+tmux send-keys -t "2" "qgc" Enter
+echo "Issued all commands"
+
+tmux attach

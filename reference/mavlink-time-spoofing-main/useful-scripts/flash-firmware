@@ -1,0 +1,1 @@
+pushd ~/repos/ardupilot && source .venv/bin/activate && ./waf configure --board Pixhawk6C && ./waf copter --upload

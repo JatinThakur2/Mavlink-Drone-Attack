@@ -1,0 +1,1 @@
+source ~/repos/MAVProxy/.venv/bin/activate && python3 ~/repos/mavlink-time-spoofing/simulate/custom-input.py

@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+
+echo "Launching three TMUX windows"
+
+tmux \
+    new-session  -s "mavlink"\; \
+    split-window -h -c "t"\; \
+    split-window -v \; \
+    detach
+
+echo "Launched three windows"
+
+tmux send-keys -t "0" "pushd ~/repos/MAVProxy && source ./.venv/bin/activate && python ./MAVProxy/mavproxy.py --console --map --load-module=GPSInput --out=127.0.0.1:5760 --mav20" Enter
+tmux send-keys -t "1" "wireshark" Enter
+tmux send-keys -t "2" "pushd ~/repos/MAVProxy && source ./.venv/bin/activate && pushd ~/repos/mavlink-time-spoofing/simulate && python simulate-gps.py" Enter
+
+echo "Issued all commands"
+
+tmux attach

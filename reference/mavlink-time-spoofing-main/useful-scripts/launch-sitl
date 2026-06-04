@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+
+echo "Launching four TMUX windows"
+
+tmux \
+    new-session  -s "mavlink"\; \
+    split-window -h -c "t"\; \
+    split-window -v \; \
+    select-pane -t 0 \; \
+    split-window -v \; \
+    detach
+
+echo "Launched tmux windows"
+
+tmux send-keys -t "0" "export GZ_VERSION=harmonic && gz sim -v4 -r iris_runway.sdf -s" Enter
+tmux send-keys -t "1" "pushd ~/repos/MAVProxy && source ./.venv/bin/activate && pushd ~/repos/mavlink-time-spoofing/simulate && python simulate-gps.py" Enter
+tmux send-keys -t "2" "wireshark" Enter
+tmux send-keys -t "3" "pushd ~/repos/MAVProxy && source ./.venv/bin/activate && pushd ~/repos/ardupilot/Tools/autotest && ./sim_vehicle.py -v ArduCopter -f gazebo-iris --wipe-eeprom --model JSON --console --add-param-file="~/repos/mavlink-time-spoofing/simulate/test-params.parm" -C --mav20 --out=127.0.0.1:5760 --load-module=GPSInput" Enter
+
+echo "Issued all commands"
+
+tmux attach

@@ -1,0 +1,14 @@
+# Install wxPython as a system package with wheel, and then create the venv with --system-site-packages;
+# that's the easiest solution!
+# sudo apt-get install python-wxgtk3.0
+# python3 -m venv .venv --system-site-packages
+
+pybind11>=2.12
+pymavlink>=2.4.14
+pyserial>=3.0
+numpy<2
+empy==3.3.4
+gnss_lib_py
+pynmeagps
+mavproxy
+future
