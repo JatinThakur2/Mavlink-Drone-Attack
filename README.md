@@ -8,6 +8,13 @@ Based on the IEEE paper:
 
 ---
 
+## Resources
+
+📁 **Google Drive** — reports, captures, and demo recordings:
+[https://drive.google.com/drive/folders/1VUQx_qEZymyvbT6c66sTA2OnFkzoj_Js?usp=sharing](https://drive.google.com/drive/folders/1VUQx_qEZymyvbT6c66sTA2OnFkzoj_Js?usp=sharing)
+
+---
+
 ## Project Overview
 
 Two-phase project:
