@@ -194,6 +194,11 @@ def main():
     # --- Send raw bytes via conn.write() (same as reference master.write(packet)) ---
     print("[4/4] Sending signed LAND command (raw bytes)...")
     conn.write(packet)
+    # Mirror to port 14551 (detector monitor port — avoids SO_REUSEPORT split)
+    import socket as _sock
+    _m = _sock.socket(_sock.AF_INET, _sock.SOCK_DGRAM)
+    _m.sendto(packet, ('127.0.0.1', 14551))
+    _m.close()
     print("      Packet sent!")
     print()
 

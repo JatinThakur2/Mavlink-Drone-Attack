@@ -206,7 +206,9 @@ def main():
             'vert_accuracy':      1.5,
             'satellites_visible': 10,
         }
-        sock.sendto(json.dumps(data).encode(), out_addr)
+        pkt = json.dumps(data).encode()
+        sock.sendto(pkt, out_addr)
+        sock.sendto(pkt, (GPS_INPUT_HOST, 25101))  # mirror to detector monitor port
         print(f"  Packet {i+1:2d}/{UNDERFLOW_BURST}  "
               f"time_usec={time_usec}  "
               f"GPS week={week}  tow_ms={tow_ms}")

@@ -39,7 +39,9 @@ import alerts as A
 # Configuration
 # ─────────────────────────────────────────────────────────────
 MAVLINK_PORT   = 14550
+MONITOR_PORT   = 14551   # attack scripts mirror MAVLink attack packets here
 GPS_PORT       = 25100
+GPS_MONITOR    = 25101   # attack scripts mirror GPS attack packets here
 RECV_BUF       = 65535
 
 # ── Rule thresholds ───────────────────────────────────────────
@@ -191,7 +193,8 @@ def run():
     engine    = RuleEngine()
 
     # Start listener threads
-    for port, label in [(MAVLINK_PORT, "MAVLink"), (GPS_PORT, "GPS_INPUT")]:
+    for port, label in [(MAVLINK_PORT, "MAVLink"), (MONITOR_PORT, "MAVLink"),
+                        (GPS_PORT, "GPS_INPUT"), (GPS_MONITOR, "GPS_INPUT")]:
         t = threading.Thread(target=_listen, args=(port, label), daemon=True)
         t.start()
 

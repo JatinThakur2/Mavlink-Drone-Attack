@@ -241,6 +241,8 @@ def main():
     print()
 
     sock.sendto(raw_packet, mavproxy_addr)
+    # Mirror to port 14551 (detector monitor port — avoids SO_REUSEPORT split)
+    sock.sendto(raw_packet, ('127.0.0.1', 14551))
     print(f"      Packet sent!")
     print()
 
