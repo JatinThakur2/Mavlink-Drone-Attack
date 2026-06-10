@@ -6,6 +6,7 @@ alerts.py  —  Alert formatting, colour output, log writer
 """
 
 import os
+import threading
 import time
 from datetime import datetime
 
@@ -105,6 +106,36 @@ def _throttle_check(tag: str, detail: str) -> bool:
     return False
 
 
+def _flush_expired_windows():
+    """
+    Flush suppressed counts for throttle windows that have expired.
+    Called by the background flusher thread every second so counts
+    appear in real-time rather than only at shutdown.
+    """
+    now = time.time()
+    for tag in list(_throttle):
+        state = _throttle.get(tag)
+        if state is None:
+            continue
+        elapsed = now - state["first_ts"]
+        if elapsed < THROTTLE_SEC:
+            continue
+        suppressed = state["count"] - 1
+        if suppressed > 0:
+            ts     = _timestamp()
+            plain  = (f"[{ts} UTC] [ALERT] {tag:<20} "
+                      f"[... {suppressed} more in {elapsed:.1f}s — suppressed to reduce noise]")
+            colour = LEVEL_COLOUR.get(LEVEL_ALERT, RESET)
+            term   = (f"{GREY}[{ts} UTC]{RESET} "
+                      f"{colour}[ALERT]{RESET} "
+                      f"{colour}{tag:<20}{RESET} "
+                      f"{GREY}[... {suppressed} more in {elapsed:.1f}s — suppressed]{RESET}")
+            print(term)
+            _write_log(plain)
+        # Reset window so subsequent events start a fresh window
+        _throttle[tag] = {"first_ts": now, "count": 1, "last_detail": state["last_detail"]}
+
+
 def _flush_all_throttled():
     """Flush any remaining suppressed counts (call at shutdown)."""
     now = time.time()
@@ -117,6 +148,19 @@ def _flush_all_throttled():
                      f"[... {suppressed} more in {elapsed:.1f}s — suppressed]")
             _write_log(plain)
             print(f"{GREY}{plain}{RESET}")
+
+
+def _start_background_flusher():
+    """Daemon thread: proactively flush expired throttle windows every second."""
+    def _run():
+        while True:
+            time.sleep(1.0)
+            _flush_expired_windows()
+    t = threading.Thread(target=_run, daemon=True, name="alert-flusher")
+    t.start()
+
+
+_start_background_flusher()
 
 
 # ─────────────────────────────────────────────────────────────
