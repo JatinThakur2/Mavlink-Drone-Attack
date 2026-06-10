@@ -134,7 +134,7 @@ def main():
     print("=" * 62)
     print()
     print(f"  Capture window  : {CAPTURE_SEC}s  ({CAPTURE_SEC//60} min)")
-    print(f"  Listening on    : UDP {MAVLINK_PORT}, {MONITOR_PORT}, {GPS_PORT}, {GPS_MONITOR}")
+    print(f"  Listening on    : UDP {MONITOR_PORT} (MAVLink monitor), {GPS_MONITOR} (GPS monitor)")
     print(f"  Model output    : {MODEL_FILE}")
     print(f"  Contamination   : {CONTAMINATION}  (5% allowed anomaly rate)")
     print(f"  Trees           : {N_ESTIMATORS}")
@@ -146,10 +146,14 @@ def main():
     print()
 
     # ── Start listener threads ────────────────────────────────────────────────
+    # Use ONLY the exclusive monitor ports (14551, 25101) — not the shared main
+    # ports (14550, 25100).  SITL outputs to 14551 directly (via --out flag) and
+    # simulate_normal_gps.py mirrors to 25101, so these ports receive one clean
+    # copy of every packet.  Listening on 14550 alongside MAVProxy via
+    # SO_REUSEPORT causes each heartbeat to arrive twice, producing seq_jump≈0.5
+    # and corrupted iat_ms in the training data.
     for port, label in [
-        (MAVLINK_PORT,  "MAVLink"),
         (MONITOR_PORT,  "MAVLink"),
-        (GPS_PORT,      "GPS_INPUT"),
         (GPS_MONITOR,   "GPS_INPUT"),
     ]:
         t = threading.Thread(target=_listen, args=(port, label), daemon=True)
