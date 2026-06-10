@@ -277,7 +277,8 @@ def run():
                     A.alert(
                         "ATK_ML_ANOMALY",
                         f"ML score={score:.4f} < threshold={ML_SCORE_THRESHOLD} | "
-                        f"source={feat.source} vector={[round(v,2) for v in feat.vector]}"
+                        f"source={feat.source} "
+                        f"ml_vector={[round(v,2) for v in feat.ml_vector]}"
                     )
                     ml_alerts += 1
 

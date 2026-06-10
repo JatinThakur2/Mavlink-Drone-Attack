@@ -81,10 +81,7 @@ MODEL_FILE = os.path.join(MODEL_DIR, "baseline.pkl")
 
 FEATURE_NAMES = [
     "ts_gap",
-    "iat_ms",
-    "seq_jump",
     "gps_sys_delta",
-    "drift_m_per_s",
 ]
 
 # ─────────────────────────────────────────────────────────────────────────────
