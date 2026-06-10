@@ -118,7 +118,7 @@ def _listen(port: int, label: str):
     while True:
         try:
             data, addr = sock.recvfrom(RECV_BUF)
-            pkt_queue.put((label, data, addr))
+            pkt_queue.put((label, port, data, addr))
         except OSError:
             break
 
@@ -130,7 +130,7 @@ class RuleEngine:
     def __init__(self):
         self._gps_arrivals: deque = deque()
 
-    def check(self, feat: Features) -> list[tuple[str, str]]:
+    def check(self, feat: Features, is_monitor: bool = True) -> list[tuple[str, str]]:
         fired = []
 
         if feat.ts_gap is not None and feat.ts_gap > TS_GAP_FUTURE_SEC:
@@ -164,7 +164,12 @@ class RuleEngine:
                 f"GPS clock +{days:.1f} days ahead | drift={drift}"
             ))
 
-        if feat.is_duplicate:
+        # Only fires for monitor port (14551) MAVLink packets.
+        # SO_REUSEPORT causes the same heartbeat to arrive on both 14550 and 14551;
+        # alerting on 14550 duplicates creates constant false positives.
+        # GPS duplicates are never replays; attack2 mirrors the same packet to both
+        # 25100 and 25101, so filtering by source=="mavlink" prevents false ATK4_REPLAY.
+        if feat.is_duplicate and feat.source == "mavlink" and is_monitor:
             fired.append((
                 "ATK4_REPLAY",
                 f"exact duplicate hash | source={feat.source} sysid={feat.sysid}"
@@ -237,11 +242,12 @@ def run():
     try:
         while True:
             try:
-                label, raw, addr = pkt_queue.get(timeout=1.0)
+                label, port, raw, addr = pkt_queue.get(timeout=1.0)
             except queue.Empty:
                 continue
 
             total_pkts += 1
+            is_monitor = port in (MONITOR_PORT, GPS_MONITOR)
 
             feat = None
             if label == "MAVLink":
@@ -256,7 +262,7 @@ def run():
                 continue
 
             # ── Layer 1: Statistical rules ────────────────────────
-            findings = rules.check(feat)
+            findings = rules.check(feat, is_monitor=is_monitor)
             if findings:
                 for tag, detail in findings:
                     A.alert(tag, detail)

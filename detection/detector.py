@@ -84,7 +84,7 @@ class RuleEngine:
         # Rolling window of GPS packet arrival times for burst detection
         self._gps_arrivals: deque = deque()
 
-    def check(self, feat: Features) -> list[tuple[str, str]]:
+    def check(self, feat: Features, is_monitor: bool = True) -> list[tuple[str, str]]:
         fired = []
 
         # ── Rule 1: Future signature timestamp ────────────────
@@ -126,8 +126,12 @@ class RuleEngine:
                 f"drift={drift} | drone will compensate → flies in opposite direction"
             ))
 
-        # ── Rule 5: Duplicate packet (replay) ─────────────────
-        if feat.is_duplicate:
+        # ── Rule 5: Duplicate MAVLink packet (replay) ─────────
+        # Only fires for monitor port (14551) MAVLink packets.
+        # Main port (14550) sees the same heartbeats as MAVProxy via SO_REUSEPORT
+        # — flagging those as replays would create constant false positives.
+        # GPS duplicates are never replays; attack2 mirrors to both 25100/25101.
+        if feat.is_duplicate and feat.source == "mavlink" and is_monitor:
             fired.append((
                 "ATK4_REPLAY",
                 f"exact duplicate packet hash detected | "
@@ -159,7 +163,7 @@ class RuleEngine:
 def _listen(port: int, label: str):
     """
     Bind a UDP socket on `port` and push every received datagram
-    onto pkt_queue as (label, raw_bytes, addr).
+    onto pkt_queue as (label, port, raw_bytes, addr).
 
     Uses SO_REUSEPORT so we can listen alongside MAVProxy/GPSInput
     without interrupting them.
@@ -177,7 +181,7 @@ def _listen(port: int, label: str):
     while True:
         try:
             data, addr = sock.recvfrom(RECV_BUF)
-            pkt_queue.put((label, data, addr))
+            pkt_queue.put((label, port, data, addr))
         except OSError:
             break
 
@@ -207,11 +211,12 @@ def run():
     try:
         while True:
             try:
-                label, raw, addr = pkt_queue.get(timeout=1.0)
+                label, port, raw, addr = pkt_queue.get(timeout=1.0)
             except queue.Empty:
                 continue
 
             total_pkts += 1
+            is_monitor = port in (MONITOR_PORT, GPS_MONITOR)
 
             # ── Extract features ──────────────────────────────────
             feat = None
@@ -227,7 +232,7 @@ def run():
                 continue
 
             # ── Apply rules ───────────────────────────────────────
-            findings = engine.check(feat)
+            findings = engine.check(feat, is_monitor=is_monitor)
 
             if findings:
                 for tag, detail in findings:
