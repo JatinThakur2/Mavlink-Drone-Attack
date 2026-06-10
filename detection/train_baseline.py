@@ -85,7 +85,6 @@ FEATURE_NAMES = [
     "seq_jump",
     "gps_sys_delta",
     "drift_m_per_s",
-    "is_duplicate",
 ]
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -182,7 +181,7 @@ def main():
                     except Exception:
                         pass
                 if feat is not None:
-                    vectors.append(feat.vector)
+                    vectors.append(feat.ml_vector)
         except queue.Empty:
             pass
 

@@ -204,51 +204,53 @@ def run():
 
     A.info("DETECTOR", "Ready. Waiting for packets... (Ctrl+C to stop)\n")
 
-    while True:
-        try:
-            label, raw, addr = pkt_queue.get(timeout=1.0)
-        except queue.Empty:
-            continue
-
-        total_pkts += 1
-
-        # ── Extract features ──────────────────────────────────
-        feat = None
-        if label == "MAVLink":
-            feat = extractor.from_mavlink(raw)
-        elif label == "GPS_INPUT":
+    try:
+        while True:
             try:
-                feat = extractor.from_gps_json(raw.decode("utf-8", errors="ignore"))
-            except Exception:
-                pass
+                label, raw, addr = pkt_queue.get(timeout=1.0)
+            except queue.Empty:
+                continue
 
-        if feat is None:
-            continue
+            total_pkts += 1
 
-        # ── Apply rules ───────────────────────────────────────
-        findings = engine.check(feat)
+            # ── Extract features ──────────────────────────────────
+            feat = None
+            if label == "MAVLink":
+                feat = extractor.from_mavlink(raw)
+            elif label == "GPS_INPUT":
+                try:
+                    feat = extractor.from_gps_json(raw.decode("utf-8", errors="ignore"))
+                except Exception:
+                    pass
 
-        if findings:
-            for tag, detail in findings:
-                A.alert(tag, detail)
-                alert_count += 1
-        else:
-            # Normal packet — print brief summary every 50 packets
-            if total_pkts % 50 == 0:
-                A.norm(
-                    "NORMAL",
-                    f"pkt={total_pkts} alerts={alert_count} | "
-                    f"vector={[round(v,1) for v in feat.vector]}"
-                )
+            if feat is None:
+                continue
+
+            # ── Apply rules ───────────────────────────────────────
+            findings = engine.check(feat)
+
+            if findings:
+                for tag, detail in findings:
+                    A.alert(tag, detail)
+                    alert_count += 1
+            else:
+                # Normal packet — print brief summary every 50 packets
+                if total_pkts % 50 == 0:
+                    A.norm(
+                        "NORMAL",
+                        f"pkt={total_pkts} alerts={alert_count} | "
+                        f"vector={[round(v,1) for v in feat.vector]}"
+                    )
+    except KeyboardInterrupt:
+        pass
+    finally:
+        print()
+        A.banner("Detector stopped")
+        A.session_summary(total_pkts, alert_count)
 
 
 # ─────────────────────────────────────────────────────────────
 # Entry point
 # ─────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    try:
-        run()
-    except KeyboardInterrupt:
-        print()
-        A.banner("Detector stopped")
-        A.info("SESSION", f"Log saved → {A.LOG_FILE}")
+    run()

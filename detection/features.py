@@ -119,6 +119,7 @@ class Features:
 
     @property
     def vector(self) -> list:
+        """Full 6-feature vector — used for display and statistical rules."""
         return [
             self.ts_gap        if self.ts_gap        is not None else 0.0,
             self.iat_ms        if self.iat_ms        is not None else 0.0,
@@ -126,6 +127,19 @@ class Features:
             self.gps_sys_delta if self.gps_sys_delta is not None else 0.0,
             self.drift_m_per_s if self.drift_m_per_s is not None else 0.0,
             float(self.is_duplicate),
+        ]
+
+    @property
+    def ml_vector(self) -> list:
+        """5-feature vector for Isolation Forest (excludes is_duplicate).
+        is_duplicate is handled perfectly by Rule 5 and corrupts ML training
+        because SO_REUSEPORT causes ~55% of normal packets to appear as duplicates."""
+        return [
+            self.ts_gap        if self.ts_gap        is not None else 0.0,
+            self.iat_ms        if self.iat_ms        is not None else 0.0,
+            self.seq_jump      if self.seq_jump      is not None else 0.0,
+            self.gps_sys_delta if self.gps_sys_delta is not None else 0.0,
+            self.drift_m_per_s if self.drift_m_per_s is not None else 0.0,
         ]
 
     def __str__(self) -> str:

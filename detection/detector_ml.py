@@ -75,7 +75,7 @@ BURST_WINDOW_SEC    = 2.0
 #   >  0.0  →  clearly normal
 #   ~  0.0  →  borderline
 #   < -0.1  →  anomaly (tune this based on false-positive rate)
-ML_SCORE_THRESHOLD  = -0.10
+ML_SCORE_THRESHOLD  = -0.13
 
 # ─────────────────────────────────────────────────────────────
 # Load model bundle
@@ -197,8 +197,9 @@ class MLLayer:
         """
         Returns (anomaly_score, is_anomaly).
         anomaly_score < ML_SCORE_THRESHOLD → is_anomaly = True.
+        Uses ml_vector (5 features) — is_duplicate excluded, handled by Rule 5.
         """
-        v      = np.array([feat.vector], dtype=np.float64)
+        v      = np.array([feat.ml_vector], dtype=np.float64)
         v_sc   = self._scaler.transform(v)
         score  = float(self._clf.decision_function(v_sc)[0])
         return score, score < ML_SCORE_THRESHOLD
@@ -233,59 +234,61 @@ def run():
 
     A.info("DETECTOR", "Ready. Waiting for packets... (Ctrl+C to stop)\n")
 
-    while True:
-        try:
-            label, raw, addr = pkt_queue.get(timeout=1.0)
-        except queue.Empty:
-            continue
-
-        total_pkts += 1
-
-        feat = None
-        if label == "MAVLink":
-            feat = extractor.from_mavlink(raw)
-        elif label == "GPS_INPUT":
+    try:
+        while True:
             try:
-                feat = extractor.from_gps_json(raw.decode("utf-8", errors="ignore"))
-            except Exception:
-                pass
+                label, raw, addr = pkt_queue.get(timeout=1.0)
+            except queue.Empty:
+                continue
 
-        if feat is None:
-            continue
+            total_pkts += 1
 
-        # ── Layer 1: Statistical rules ────────────────────────
-        findings = rules.check(feat)
-        if findings:
-            for tag, detail in findings:
-                A.alert(tag, detail)
-                rule_alerts += 1
+            feat = None
+            if label == "MAVLink":
+                feat = extractor.from_mavlink(raw)
+            elif label == "GPS_INPUT":
+                try:
+                    feat = extractor.from_gps_json(raw.decode("utf-8", errors="ignore"))
+                except Exception:
+                    pass
 
-        # ── Layer 2: Isolation Forest ─────────────────────────
-        score, is_anom = ml.score(feat)
-        if is_anom:
-            # Only fire ML alert if rules did NOT already flag this packet
-            # to avoid double-counting obvious attacks.
-            if not findings:
-                A.alert(
-                    "ATK_ML_ANOMALY",
-                    f"ML score={score:.4f} < threshold={ML_SCORE_THRESHOLD} | "
-                    f"source={feat.source} vector={[round(v,2) for v in feat.vector]}"
+            if feat is None:
+                continue
+
+            # ── Layer 1: Statistical rules ────────────────────────
+            findings = rules.check(feat)
+            if findings:
+                for tag, detail in findings:
+                    A.alert(tag, detail)
+                    rule_alerts += 1
+
+            # ── Layer 2: Isolation Forest ─────────────────────────
+            score, is_anom = ml.score(feat)
+            if is_anom:
+                # Only fire ML alert if rules did NOT already flag this packet
+                # to avoid double-counting obvious attacks.
+                if not findings:
+                    A.alert(
+                        "ATK_ML_ANOMALY",
+                        f"ML score={score:.4f} < threshold={ML_SCORE_THRESHOLD} | "
+                        f"source={feat.source} vector={[round(v,2) for v in feat.vector]}"
+                    )
+                    ml_alerts += 1
+
+            # ── Normal packet summary every 50 packets ────────────
+            if not findings and not is_anom and total_pkts % 50 == 0:
+                A.norm(
+                    "NORMAL",
+                    f"pkt={total_pkts} rule_alerts={rule_alerts} ml_alerts={ml_alerts} "
+                    f"ml_score={score:.3f} | vector={[round(v,1) for v in feat.vector]}"
                 )
-                ml_alerts += 1
-
-        # ── Normal packet summary every 50 packets ────────────
-        if not findings and not is_anom and total_pkts % 50 == 0:
-            A.norm(
-                "NORMAL",
-                f"pkt={total_pkts} rule_alerts={rule_alerts} ml_alerts={ml_alerts} "
-                f"ml_score={score:.3f} | vector={[round(v,1) for v in feat.vector]}"
-            )
+    except KeyboardInterrupt:
+        pass
+    finally:
+        print()
+        A.banner("Detector stopped")
+        A.session_summary(total_pkts, rule_alerts + ml_alerts)
 
 
 if __name__ == "__main__":
-    try:
-        run()
-    except KeyboardInterrupt:
-        print()
-        A.banner("Detector stopped")
-        A.info("SESSION", f"Log saved → {A.LOG_FILE}")
+    run()
