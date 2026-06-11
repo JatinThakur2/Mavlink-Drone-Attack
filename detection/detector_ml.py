@@ -90,10 +90,11 @@ def _load_model():
     with open(MODEL_FILE, "rb") as f:
         bundle = pickle.load(f)
 
-    A.info("ML", f"Model loaded — trained {bundle['trained_at']}")
+    src = "synthetic" if bundle.get("synthetic") else f"live capture {bundle['capture_sec']}s"
+    A.info("ML", f"Model loaded — trained {bundle['trained_at']}  ({src})")
     A.info("ML", f"  samples={bundle['n_samples']:,}  "
                  f"contamination={bundle['contamination']}  "
-                 f"capture={bundle['capture_sec']}s")
+                 f"features={bundle.get('feature_names', ['ts_gap','gps_sys_delta'])}")
     A.info("ML", f"  score_mean={bundle['score_mean']:.4f}  "
                  f"threshold={ML_SCORE_THRESHOLD}")
     return bundle["scaler"], bundle["clf"]
