@@ -1,0 +1,6 @@
+reference_time_unix=1781672734.29
+reference_time_utc=2026-06-17 05:05:34 UTC
+samples_per_class=1000
+train_ratio=0.8
+atk3_gps_mean=2453147432.71
+atk3b_gps_mean=-519368734.29
