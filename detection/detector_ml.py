@@ -3,28 +3,29 @@
 =============================================================
 Step 4 — Two-Layer Real-Time Detector
 =============================================================
-Combines the Step 2 statistical rules with the Step 3
-Isolation Forest model for two-layer anomaly detection.
+Combines the Step 2 statistical rules with a supervised
+RandomForestClassifier that names the specific attack type.
 
 Layer 1 — Statistical rules (instant, no training needed)
-    Same 6 rules as detector.py:
-      Rule 1  ATK1_FUTURE_TS     — future MAVLink signature
-      Rule 2  ATK3B_UNDERFLOW    — GPS pre-epoch timestamp
-      Rule 3  ATK3_OVERFLOW      — GPS far-future timestamp
-      Rule 4  ATK2_GPS_SPOOF     — GPS clock >1 day ahead
-      Rule 5  ATK4_REPLAY        — duplicate packet hash
-      Rule 6  ATK3B_BURST        — GPS burst DoS pattern
+    Rule 1  ATK1_FUTURE_TS     — future MAVLink signature
+    Rule 2  ATK3B_UNDERFLOW    — GPS pre-epoch timestamp
+    Rule 3  ATK3_OVERFLOW      — GPS far-future timestamp
+    Rule 4  ATK2_GPS_SPOOF     — GPS clock >1 day ahead
+    Rule 5  ATK4_REPLAY        — duplicate packet hash
+    Rule 6  ATK3B_BURST        — GPS burst DoS pattern
 
-Layer 2 — Isolation Forest (trained on Step 3 normal traffic)
-    Scores every feature vector against the learned normal
-    distribution.  Fires ATK_ML_ANOMALY when the anomaly
-    score crosses the threshold.
+Layer 2 — RandomForestClassifier (ml/train_classifier.py)
+    Classifies every packet into one of six named classes:
+      NORMAL | ATK1_FUTURE | ATK2_SPOOF | ATK3_OVER
+      ATK3B_UNDER | ATK4_REPLAY
+    Fires ATK_ML_<CLASS> only when Layer 1 did not already
+    catch the packet, avoiding duplicate alerts.
 
 Prerequisites
 -------------
-  1. Run Step 3 first to train the model:
-         python3 detection/train_baseline.py
-  2. Model must exist at detection/models/baseline.pkl
+  1. python3 ml/generate_dataset.py
+  2. python3 ml/train_classifier.py
+     (saves detection/models/classifier.pkl)
 
 Run
 ---
@@ -60,7 +61,11 @@ GPS_PORT       = 25100
 GPS_MONITOR    = 25101
 RECV_BUF       = 65535
 
-MODEL_FILE     = os.path.join(SCRIPT_DIR, "models", "baseline.pkl")
+MODEL_FILE     = os.path.join(SCRIPT_DIR, "models", "classifier.pkl")
+
+# Minimum confidence for the classifier to fire an ML alert.
+# Below this threshold the prediction is treated as NORMAL.
+ML_CONF_THRESHOLD = 0.70
 
 # ── Statistical rule thresholds (identical to detector.py) ────
 TS_GAP_FUTURE_SEC   = 3600
@@ -70,34 +75,26 @@ GPS_SPOOF_DELTA_SEC = 86_400
 BURST_COUNT         = 5
 BURST_WINDOW_SEC    = 2.0
 
-# ── ML layer threshold ─────────────────────────────────────────
-# Isolation Forest decision_function returns:
-#   >  0.0  →  clearly normal
-#   ~  0.0  →  borderline
-#   < -0.1  →  anomaly (tune this based on false-positive rate)
-ML_SCORE_THRESHOLD  = -0.13
-
 # ─────────────────────────────────────────────────────────────
 # Load model bundle
 # ─────────────────────────────────────────────────────────────
 def _load_model():
     if not os.path.exists(MODEL_FILE):
-        print(f"\n[ERROR] Model not found: {MODEL_FILE}")
-        print("        Run Step 3 first:")
-        print("          python3 detection/train_baseline.py\n")
+        print(f"\n[ERROR] Classifier not found: {MODEL_FILE}")
+        print("        Build it first:")
+        print("          python3 ml/generate_dataset.py")
+        print("          python3 ml/train_classifier.py\n")
         sys.exit(1)
 
     with open(MODEL_FILE, "rb") as f:
         bundle = pickle.load(f)
 
-    src = "synthetic" if bundle.get("synthetic") else f"live capture {bundle['capture_sec']}s"
-    A.info("ML", f"Model loaded — trained {bundle['trained_at']}  ({src})")
-    A.info("ML", f"  samples={bundle['n_samples']:,}  "
-                 f"contamination={bundle['contamination']}  "
-                 f"features={bundle.get('feature_names', ['ts_gap','gps_sys_delta'])}")
-    A.info("ML", f"  score_mean={bundle['score_mean']:.4f}  "
-                 f"threshold={ML_SCORE_THRESHOLD}")
-    return bundle["scaler"], bundle["clf"]
+    label_names = bundle["label_names"]
+    classes_str = "  ".join(f"{k}={v}" for k, v in sorted(label_names.items()))
+    A.info("ML", f"Classifier loaded — features={bundle['features']}")
+    A.info("ML", f"  classes: {classes_str}")
+    A.info("ML", f"  confidence threshold: {ML_CONF_THRESHOLD}")
+    return bundle["model"], label_names
 
 
 # ─────────────────────────────────────────────────────────────
@@ -192,38 +189,52 @@ class RuleEngine:
 
 
 # ─────────────────────────────────────────────────────────────
-# ML scoring layer
+# ML classification layer
 # ─────────────────────────────────────────────────────────────
-class MLLayer:
-    def __init__(self, scaler, clf):
-        self._scaler = scaler
-        self._clf    = clf
+class ClassifierLayer:
+    """
+    Wraps the RandomForestClassifier pipeline.
 
-    def score(self, feat: Features) -> tuple[float, bool]:
-        """
-        Returns (anomaly_score, is_anomaly).
-        anomaly_score < ML_SCORE_THRESHOLD → is_anomaly = True.
-        Uses ml_vector (5 features) — is_duplicate excluded, handled by Rule 5.
-        """
-        v      = np.array([feat.ml_vector], dtype=np.float64)
-        v_sc   = self._scaler.transform(v)
-        score  = float(self._clf.decision_function(v_sc)[0])
-        return score, score < ML_SCORE_THRESHOLD
+    classify() returns (label_id, label_name, confidence).
+    The pipeline already includes StandardScaler internally,
+    so raw feature values are passed directly.
+
+    Features used: [ts_gap, gps_sys_delta, is_duplicate]
+    """
+
+    NORMAL_ID = 0
+
+    def __init__(self, model, label_names: dict):
+        self._model       = model
+        self._label_names = label_names
+
+    def classify(self, feat: Features) -> tuple[int, str, float]:
+        x = np.array([[
+            feat.ts_gap        if feat.ts_gap        is not None else 0.0,
+            feat.gps_sys_delta if feat.gps_sys_delta is not None else 0.0,
+            float(feat.is_duplicate),
+        ]], dtype=np.float64)
+
+        label_id   = int(self._model.predict(x)[0])
+        proba      = self._model.predict_proba(x)[0]
+        confidence = float(proba[label_id])
+        label_name = self._label_names.get(label_id, "UNKNOWN")
+        return label_id, label_name, confidence
 
 
 # ─────────────────────────────────────────────────────────────
 # Main loop
 # ─────────────────────────────────────────────────────────────
 def run():
-    A.banner("MAVLink Two-Layer Detector — Step 4 (Rules + Isolation Forest)")
+    A.banner("MAVLink Two-Layer Detector — Rules + RandomForest Classifier")
 
-    scaler, clf = _load_model()
+    model, label_names = _load_model()
 
     A.info("DETECTOR", "Starting listeners...")
 
     extractor  = FeatureExtractor()
     rules      = RuleEngine()
-    ml         = MLLayer(scaler, clf)
+    clf_layer  = ClassifierLayer(model, label_names)
 
     for port, label in [
         (MAVLINK_PORT, "MAVLink"),
@@ -234,9 +245,11 @@ def run():
         t = threading.Thread(target=_listen, args=(port, label), daemon=True)
         t.start()
 
-    total_pkts   = 0
-    rule_alerts  = 0
-    ml_alerts    = 0
+    total_pkts  = 0
+    rule_alerts = 0
+    ml_alerts   = 0
+    last_conf   = 0.0
+    last_class  = "NORMAL"
 
     A.info("DETECTOR", "Ready. Waiting for packets... (Ctrl+C to stop)\n")
 
@@ -269,26 +282,36 @@ def run():
                     A.alert(tag, detail)
                     rule_alerts += 1
 
-            # ── Layer 2: Isolation Forest ─────────────────────────
-            score, is_anom = ml.score(feat)
-            if is_anom:
-                # Only fire ML alert if rules did NOT already flag this packet
-                # to avoid double-counting obvious attacks.
-                if not findings:
-                    A.alert(
-                        "ATK_ML_ANOMALY",
-                        f"ML score={score:.4f} < threshold={ML_SCORE_THRESHOLD} | "
-                        f"source={feat.source} "
-                        f"ml_vector={[round(v,2) for v in feat.ml_vector]}"
-                    )
-                    ml_alerts += 1
+            # ── Layer 2: RandomForest classifier ──────────────────
+            label_id, label_name, confidence = clf_layer.classify(feat)
+            last_conf  = confidence
+            last_class = label_name
+
+            is_attack = (label_id != ClassifierLayer.NORMAL_ID
+                         and confidence >= ML_CONF_THRESHOLD)
+
+            if is_attack and not findings:
+                # Rules did not catch it — ML classifier provides the alert
+                fv = [
+                    feat.ts_gap        if feat.ts_gap        is not None else 0.0,
+                    feat.gps_sys_delta if feat.gps_sys_delta is not None else 0.0,
+                    float(feat.is_duplicate),
+                ]
+                A.alert(
+                    f"ATK_ML_{label_name}",
+                    f"classifier={label_name} conf={confidence:.2%} | "
+                    f"source={feat.source} "
+                    f"features=[ts_gap={fv[0]:.1f}, gps_delta={fv[1]:.1f}, dup={int(fv[2])}]"
+                )
+                ml_alerts += 1
 
             # ── Normal packet summary every 50 packets ────────────
-            if not findings and not is_anom and total_pkts % 50 == 0:
+            if not findings and not is_attack and total_pkts % 50 == 0:
                 A.norm(
                     "NORMAL",
                     f"pkt={total_pkts} rule_alerts={rule_alerts} ml_alerts={ml_alerts} "
-                    f"ml_score={score:.3f} | vector={[round(v,1) for v in feat.vector]}"
+                    f"ml={last_class}({last_conf:.0%}) | "
+                    f"vector={[round(v,1) for v in feat.vector]}"
                 )
     except KeyboardInterrupt:
         pass
