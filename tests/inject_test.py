@@ -199,7 +199,7 @@ ATTACKS = {
 
 
 def main():
-    choice = sys.argv[1].lower() if len(sys.argv) > 1 else "all"
+    args = [a.lower() for a in sys.argv[1:]] if len(sys.argv) > 1 else ["all"]
 
     print("=" * 55)
     print("  MAVLink Attack Injector — no SITL required")
@@ -208,7 +208,9 @@ def main():
     print(f"  GPS monitor     : {HOST}:{GPS_MONITOR_PORT}")
     print()
 
-    if choice == "all":
+    run_all = "all" in args
+
+    if run_all:
         inject_normal()
         time.sleep(0.5)
         inject_atk1()
@@ -220,12 +222,13 @@ def main():
         inject_atk3b()
         time.sleep(0.5)
         inject_atk4()
-    elif choice in ATTACKS:
-        ATTACKS[choice]()
     else:
-        print(f"Unknown attack: {choice}")
-        print(f"Valid choices: {', '.join(ATTACKS)} all")
-        sys.exit(1)
+        for choice in args:
+            if choice in ATTACKS:
+                ATTACKS[choice]()
+                time.sleep(0.5)
+            else:
+                print(f"Unknown: {choice}  (valid: {', '.join(ATTACKS)} all)")
 
     print("\nDone. Check your detector terminal for alerts.")
 
