@@ -131,22 +131,15 @@ class Features:
 
     @property
     def ml_vector(self) -> list:
-        """2-feature vector for Isolation Forest.
+        """3-feature vector for the RandomForest classifier.
 
-        Only ts_gap and gps_sys_delta are used:
-        - ts_gap and gps_sys_delta are cleanly measurable and attacks push
-          them 30,000–120,000,000 sigma from normal.
-        - iat_ms and seq_jump are corrupted by SO_REUSEPORT: the trainer
-          receives the same heartbeat on ports 14550 and 14551 simultaneously,
-          making every second packet appear as a near-zero iat_ms and a
-          seq_jump=1 — so the model learns that seq_jump≈0.65 and
-          iat_ms up to 31,000ms are "normal", destroying those features.
-        - drift_m_per_s is always 0 with a static GPS simulator.
-        - is_duplicate is handled by Rule 5 (statistical layer).
+        Features: [ts_gap, gps_sys_delta, is_duplicate]
+        Matches FEATURES in ml/train_classifier.py and ClassifierLayer.classify().
         """
         return [
             self.ts_gap        if self.ts_gap        is not None else 0.0,
             self.gps_sys_delta if self.gps_sys_delta is not None else 0.0,
+            float(self.is_duplicate),
         ]
 
     def __str__(self) -> str:

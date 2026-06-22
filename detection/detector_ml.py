@@ -209,11 +209,7 @@ class ClassifierLayer:
         self._label_names = label_names
 
     def classify(self, feat: Features) -> tuple[int, str, float]:
-        x = np.array([[
-            feat.ts_gap        if feat.ts_gap        is not None else 0.0,
-            feat.gps_sys_delta if feat.gps_sys_delta is not None else 0.0,
-            float(feat.is_duplicate),
-        ]], dtype=np.float64)
+        x = np.array([feat.ml_vector], dtype=np.float64)
 
         label_id   = int(self._model.predict(x)[0])
         proba      = self._model.predict_proba(x)[0]

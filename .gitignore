@@ -41,6 +41,11 @@ logs/
 # MAVProxy temp files
 *.mav
 
+# ArduPilot / MAVProxy files that land in the repo root when run from here
+mav.parm
+mav.tlog
+mav.tlog.raw
+
 # ─────────────────────────────────────────────
 # Wireshark / tshark
 # ─────────────────────────────────────────────
