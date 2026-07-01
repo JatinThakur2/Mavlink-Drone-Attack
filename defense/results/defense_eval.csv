@@ -1,0 +1,8 @@
+scenario,expect_pass,total,passed,blocked,bad_rate_pct,avg_lat_us,max_lat_us,metric
+"Normal (signed, monotonically increasing ts)",True,100,100,0,0.0,6.27,33.92,FAR (False Accept Rate expected 0%)
+Attack 1 — Future timestamp injection (+1 day),False,100,0,100,0.0,3.67,9.6,TPR (True Positive Rate expected 100%)
+Attack 1 (subtle) — +3s (just over threshold),False,50,0,50,0.0,3.58,7.03,TPR (True Positive Rate expected 100%)
+Attack 4 (a) — Replay of future-signed captured packet,False,100,0,100,0.0,3.57,7.86,TPR (True Positive Rate expected 100%)
+Attack 4 (b) — Replay of legitimate packet (50 copies),False,50,1,49,2.0,5.87,16.55,TPR (True Positive Rate expected 100%)
+Edge — Fine-grained monotonic jitter (must pass),True,30,30,0,0.0,6.14,9.96,FAR (False Accept Rate expected 0%)
+Compatibility — Unsigned MAVLink v2 packets,True,40,40,0,0.0,1.47,2.79,FAR (False Accept Rate expected 0%)
