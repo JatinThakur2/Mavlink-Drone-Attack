@@ -4,11 +4,19 @@ Combined attack injector — exercises the DETECTOR and the DEFENSE proxy at onc
 
 Each attack packet is sent to BOTH:
   • the detector's mirror port   127.0.0.1:14551   (+ GPS JSON on :25101)
-  • the defense proxy's input     127.0.0.1:14549
+  • the defense proxy's input     127.0.0.1:14549   (+ GPS JSON on :25102)
+
+The detector and defense use SEPARATE GPS ports (25101 vs 25102) so they
+can run at the same time — a single UDP port can only be bound by one
+process, so sharing 25101 would starve one of them of the GPS feed.
 
 So a single run shows, side by side:
   • the DETECTOR flagging the attack   (Terminal running realtime_detector_v4.py)
   • the DEFENSE proxy blocking it       (Terminal running secure_timestamp_defense.py)
+
+Start the two components like this:
+  Terminal A: python3 realtime_detector_v4.py
+  Terminal B: python3 secure_timestamp_defense.py --listen 14549 --forward 14550 --gps 25102
 
 Usage:
   python3 test_combined.py        # run all 4 attacks
@@ -20,7 +28,8 @@ import socket, struct, hashlib, time, sys, json
 HOST          = '127.0.0.1'
 DETECTOR_PORT = 14551            # detector mirror (sees signed packets intact)
 DEFENSE_PORT  = 14549            # defense proxy input
-GPS_PORT      = 25101            # shared GPS JSON feed (both components read this)
+GPS_PORT      = 25101            # detector GPS feed
+DEFENSE_GPS   = 25102            # defense GPS feed (separate port so both can run at once)
 MAVLINK_EPOCH = 1_420_070_400
 SECRET_KEY    = 'key'
 
@@ -113,7 +122,9 @@ def send_gps_json(gps_unix: float):
         'vert_accuracy':      1.5,
         'satellites_visible': 10,
     }
-    sock.sendto(json.dumps(data).encode(), (HOST, GPS_PORT))
+    blob = json.dumps(data).encode()
+    sock.sendto(blob, (HOST, GPS_PORT))     # detector GPS socket (25101)
+    sock.sendto(blob, (HOST, DEFENSE_GPS))  # defense GPS socket (25102)
 
 
 def banner(title):
@@ -177,7 +188,10 @@ def test_attack4():
     #     Copy 1 passes all layers and forwards; copies 2-3 match the cache
     #     -> Defense L4-REPLAY. The detector's raw-hash check also flags the
     #     repeats as duplicates.
-    dup = build_signed_packet(time.time(), seq=99)       # same bytes each send
+    now = time.time()
+    send_gps_json(now)                                   # reset GPS to NOW so L3 passes
+    time.sleep(0.2)
+    dup = build_signed_packet(now, seq=99)               # same bytes each send
     for i in range(3):
         send_both(dup)
         time.sleep(0.4)
@@ -194,7 +208,8 @@ print(f'  Defense proxy   : {HOST}:{DEFENSE_PORT}')
 print('=' * 54)
 print('  Run BOTH in separate terminals first:')
 print('    Terminal A: python3 realtime_detector_v4.py')
-print('    Terminal B: python3 secure_timestamp_defense.py')
+print('    Terminal B: python3 secure_timestamp_defense.py '
+      '--listen 14549 --forward 14550 --gps 25102')
 print()
 
 if len(sys.argv) > 1 and sys.argv[1] in tests:
