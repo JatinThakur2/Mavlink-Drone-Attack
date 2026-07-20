@@ -198,8 +198,27 @@ def test_attack4():
     print('  4b dup-valid: Defense -> 1st forwards, copies 2-3 BLOCK L4-REPLAY')
 
 
+def test_monotonic():
+    banner('Attack 5 — Out-of-order / timestamp rewind (defense L2)')
+    # An attacker replays a signed command whose timestamp is slightly OLDER
+    # than one already accepted on this link: recent enough to pass L1's tight
+    # window, but going backward in time. L1/L3/L4 let it through; only L2
+    # (monotonic per link_id) catches the regression.
+    now = time.time()
+    send_gps_json(now)                                   # keep GPS current so L3 passes
+    time.sleep(0.2)
+    # 1) fresh valid packet -> accepted, sets last_accepted = now
+    send_both(build_signed_packet(now, seq=120))
+    time.sleep(0.3)
+    # 2) same link, timestamp 1s EARLIER (still within L1 +-2s) -> L2 blocks
+    send_both(build_signed_packet(now - 1.0, seq=121))
+    time.sleep(0.3)
+    print('  Defense expect : 1st PASS, 2nd BLOCK L2-MONOTONIC (ts went backward)')
+
+
 # ── Main ──────────────────────────────────────────────────────
-tests = {'1': test_attack1, '2': test_attack2, '3': test_attack3, '4': test_attack4}
+tests = {'1': test_attack1, '2': test_attack2, '3': test_attack3,
+         '4': test_attack4, '5': test_monotonic}
 
 print('=' * 54)
 print('  MAVLink Combined Injector — Detector + Defense')
