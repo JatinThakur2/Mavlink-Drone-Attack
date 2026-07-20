@@ -162,13 +162,26 @@ def test_attack3():
 
 
 def test_attack4():
-    banner('Attack 4 — Replay Attack (past timestamp, repeated)')
+    banner('Attack 4 — Replay Attack')
+
+    # 4a) Stale-timestamp replay (~5.3 yr old) — this is what the DETECTOR
+    #     flags as replay (past offset). At the defense proxy the old ts is
+    #     caught by L1 first, so it never reaches L4 (expected).
     past_ts = time.time() - 166_910_935                  # ~5.3 years ago (2021)
     for i in range(3):
         send_both(build_signed_packet(past_ts + i * 0.1, seq=i))
-        time.sleep(0.5)
-    print('  Detector expect : ATTACK-4  Replay Attack')
-    print('  Defense  expect : BLOCK L4  (replay cache) on repeats')
+        time.sleep(0.4)
+    print('  4a stale-ts : Detector -> ATTACK-4 replay | Defense -> BLOCK L1 (old ts)')
+
+    # 4b) Duplicate-of-valid replay — one valid-NOW signed packet sent 3x.
+    #     Copy 1 passes all layers and forwards; copies 2-3 match the cache
+    #     -> Defense L4-REPLAY. The detector's raw-hash check also flags the
+    #     repeats as duplicates.
+    dup = build_signed_packet(time.time(), seq=99)       # same bytes each send
+    for i in range(3):
+        send_both(dup)
+        time.sleep(0.4)
+    print('  4b dup-valid: Defense -> 1st forwards, copies 2-3 BLOCK L4-REPLAY')
 
 
 # ── Main ──────────────────────────────────────────────────────
